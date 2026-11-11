@@ -10,14 +10,12 @@ import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.jenkinsci.plugins.workflow.multibranch.WorkflowMultiBranchProject;
 import org.jenkinsci.plugins.workflow.multibranch.extended.scm.ExcludeFromPoll;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 
@@ -44,16 +42,6 @@ public class ExcludeFromPollTest {
     public void setup() throws Exception {
         // Init Source Code Repo with test files and branches
         this.initSourceCodeRepo();
-    }
-
-    @After
-    public void dispose() throws Exception {
-        // On Windows, test is not executed, because of below error:
-        // ExcludeFromPollTest.testRemoteJenkinsFile » FileSystem ...\remote-file-plugin\target\tmp\j h14274673471981878038\workspace\RemoteJenkinsFileProject_master@script\a0f6ab0a0a5fefdeec6a896ffe3ae660a88d73d9fe90d600368f502366cf31c7: The process cannot access the file because it is being used by another process
-        // This error occurs when invoking org.jvnet.hudson.test.TestEnvironment.dispose(TestEnvironment.java:84)
-        // Basically it is trying to delete temporary directory
-        // After adding a small timeout, it is working
-        TimeUnit.SECONDS.sleep(1);
     }
 
     @Test
@@ -118,7 +106,10 @@ public class ExcludeFromPollTest {
             assertEquals(1, lastBuild.getNumber());
             this.addDummyCommit();
             SCMTrigger scmTrigger = branchJob.getSCMTrigger();
-            branchJob.getSCMTrigger().run();
+            // Poll synchronously so no git process is still running when the test finishes
+            // (on Windows that would lock files and break temp directory cleanup)
+            scmTrigger.getDescriptor().synchronousPolling = true;
+            scmTrigger.run();
             this.jenkins.waitUntilNoActivity();
             lastBuild = branchJob.getLastBuild();
             assertEquals(1, lastBuild.getNumber());
